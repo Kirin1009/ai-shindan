@@ -251,6 +251,43 @@
     margin-bottom:6px;
   }
   .next p{font-size:.98rem;line-height:1.9;}
+  /* 所見欄(社長からの一言) */
+  .remark{
+    border:1px solid var(--rule);
+    display:grid;
+    grid-template-columns:auto 1fr;
+    margin-bottom:30px;
+  }
+  .remark h2{
+    writing-mode:vertical-rl;
+    font-size:.78rem;
+    font-weight:500;
+    color:var(--ink-soft);
+    letter-spacing:.3em;
+    padding:12px 8px;
+    border-right:1px solid var(--rule);
+  }
+  .remark p{
+    font-family:var(--mincho);
+    font-weight:600;
+    font-size:1.05rem;
+    line-height:1.9;
+    padding:14px 16px 12px;
+    align-self:center;
+  }
+  .remark p::after{
+    content:"印";
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:1.5em;height:1.5em;
+    margin-left:.6em;
+    border:1px solid var(--shu);
+    border-radius:50%;
+    color:var(--shu);
+    font-size:.72rem;
+    vertical-align:.15em;
+  }
   .homework{
     border-top:1px solid var(--rule);
     padding-top:20px;
@@ -338,6 +375,10 @@
         <h2>次の一歩</h2>
         <p id="nextStep"></p>
       </div>
+      <div class="remark">
+        <h2>社長所見</h2>
+        <p id="remark"></p>
+      </div>
       <div class="homework">
         <h2>本日の宿題(全員共通)</h2>
         <ol>
@@ -407,26 +448,31 @@ const LEVELS = [
     min:0, max:20, name:"チャット期",
     verdict:"AIはまだ「検索の代わり」です。悲観する話ではありません——ここからが一番伸びます。",
     next:"今日帰ったら、まず自分のカードで課金してください。月数千円。経営判断の材料としては安すぎる投資です。",
+    remark:"一年前の私も、ここでした。",
   },
   {
     min:21, max:40, name:"手足期",
     verdict:"AIに手足がつき始めています。「聞く相手」から「働く相手」に変わる入口です。",
     next:"毎日ひとつ、「作業」を任せてください。ファイル整理でも資料の下書きでもいい。任せた分だけ、任せ方が上手くなります。",
+    remark:"私の最初の仕事は、ファイル整理でした。",
   },
   {
     min:41, max:60, name:"接続期",
     verdict:"情報が繋がり始めています。会社に眠る「死んだデータ」が資産に変わる手前です。",
     next:"メールとカレンダー、まだなら今週中に繋いでください。その次は社内のデータ——日報、議事録、修理記録。あれは全部、宝の山です。",
+    remark:"ここを越えると、景色が変わります。",
   },
   {
     min:61, max:80, name:"自作期",
     verdict:"作る側に回っています。「見積もりを取る前に、自分で作れないか」と考えられる段階です。",
     next:"興味のあるアプリを一個、作ってください。仕事じゃなくていい。私はサウナのアプリでした。",
+    remark:"サウナアプリ、待ってます。",
   },
   {
     min:81, max:100, name:"環境設計期",
     verdict:"ここから先は、AIの話ではなく経営の話です。",
     next:"あなた個人の活用を、会社の環境に変えてください。データを繋ぎ、ルールを与え、記憶を持たせる。環境設計は、社長の本業です。",
+    remark:"今度は、御社の話を聞かせてください。",
   },
 ];
 
@@ -471,6 +517,7 @@ function renderResult(){
   $("stampText").textContent = lv.name;
   $("verdict").textContent = lv.verdict;
   $("nextStep").textContent = lv.next;
+  $("remark").textContent = lv.remark;
   const stamp = $("stamp");
   stamp.classList.remove("press");
   void stamp.offsetWidth;
