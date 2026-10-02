@@ -292,6 +292,44 @@
     justify-content:space-between;
     gap:10px;
   }
+  .keiko{
+    border-top:1px solid var(--ink);
+    padding-top:20px;
+    margin-bottom:30px;
+  }
+  .keiko h2{
+    font-family:var(--mincho);
+    font-size:1rem;
+    font-weight:700;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+  .keiko h2 b{color:var(--shu);margin-right:6px;}
+  .keiko .how{
+    font-size:.88rem;
+    color:var(--ink-soft);
+    margin-bottom:12px;
+  }
+  .prompt-box{
+    border:1px solid var(--rule);
+    background:#fff;
+    padding:14px 14px;
+    font-size:.82rem;
+    line-height:1.75;
+    white-space:pre-wrap;
+    word-break:break-word;
+    overflow-wrap:anywhere;
+    max-height:320px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    -webkit-user-select:text;
+    user-select:text;
+    -webkit-touch-callout:default;
+    margin-bottom:12px;
+  }
+  .copy-row{display:flex;align-items:center;gap:12px;}
+  .copy-row .btn{width:auto;flex:0 0 auto;padding:12px 28px;font-size:.95rem;}
+  .copy-msg{font-size:.82rem;color:var(--shu);min-height:1.4em;}
   .hidden{display:none;}
 </style>
 </head>
@@ -346,6 +384,15 @@
         </ol>
       </div>
       <p class="share-note">検査が終わったら、隣の方と点数を見せ合ってください。</p>
+      <div class="keiko">
+        <h2><b>附、</b>AIと続ける稽古</h2>
+        <p class="how">下の文章をコピーして、ChatGPT や Claude などのAIに貼り付けてください。あなたの検査結果をもとに、AIがコーチ役になって一歩ずつ稽古をつけてくれます。</p>
+        <div class="prompt-box" id="coachPrompt"></div>
+        <div class="copy-row">
+          <button class="btn" id="copyPrompt">コピー</button>
+          <span class="copy-msg" id="copyMsg" aria-live="polite"></span>
+        </div>
+      </div>
       <button class="btn-ghost" id="retry">もう一度検査する</button>
     </section>
   </main>
@@ -484,6 +531,80 @@ function renderQ(){
   window.scrollTo({top:0});
 }
 
+function buildCoachPrompt(total, lv){
+  const lines = QUESTIONS.map((q,qi)=>{
+    const o = q.opts[answers[qi]];
+    return `${KANJI[qi]}、${q.q}\n  → ${o.t}(${o.p}/20点)`;
+  });
+  const weak = QUESTIONS
+    .map((q,qi)=>({qi, p:q.opts[answers[qi]].p}))
+    .filter(x => x.p < 20)
+    .sort((a,b)=> a.p - b.p || a.qi - b.qi)
+    .slice(0,2)
+    .map(x => `・項目${KANJI[x.qi]}:${QUESTIONS[x.qi].q}`);
+  const li = LEVELS.indexOf(lv);
+  const goal = li < LEVELS.length - 1
+    ? `次の段階「${LEVELS[li+1].name}」に上がること`
+    : `「${lv.name}」として、個人の活用を会社の環境に広げること`;
+  return [
+    "あなたは、私のAI活用を一歩ずつ上達させるコーチです。",
+    "私は「AI活用度 検査」を受けました。結果は次のとおりです。",
+    "",
+    "【検査結果】",
+    `総合:${total}点/100点(${lv.name})`,
+    `判定:${lv.verdict}`,
+    `次の一歩:${lv.next}`,
+    "",
+    "【各項目の回答】",
+    ...lines,
+    "",
+    "【伸びしろのある項目】",
+    ...(weak.length ? weak : ["・全項目満点。会社全体への展開が課題"]),
+    "",
+    "【目標】",
+    goal,
+    "",
+    "【進め方】",
+    "1. 最初に、私の仕事・業種・普段使っているツールについて、3つまで質問してください。",
+    "2. 答えをもとに、15分以内で終わる具体的な課題を1つだけ出してください。手順も短く添えてください。",
+    "3. 私が「やった」「できなかった」と報告したら、結果を一緒に振り返り、次の課題を1つ出してください。",
+    "4. 課題は「伸びしろのある項目」から優先し、少しずつ難しくしてください。",
+    "5. 専門用語は使わず、使ったときは一言で説明してください。",
+    "6. 3課題ごとに、今の私がどの段階にいるか、検査の五段階で評価してください。",
+    "",
+    "では、最初の質問からお願いします。",
+  ].join("\n");
+}
+
+function copyPrompt(){
+  const text = $("coachPrompt").textContent;
+  const msg = $("copyMsg");
+  const done = ok => { msg.textContent = ok ? "コピーしました" : "全体を選択しました。長押しでコピーしてください"; };
+  const fallback = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly","");
+    ta.style.position = "fixed"; ta.style.top = "0"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try{ ok = document.execCommand("copy"); }catch(e){}
+    document.body.removeChild(ta);
+    if(!ok){
+      const r = document.createRange();
+      r.selectNodeContents($("coachPrompt"));
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+    }
+    done(ok);
+  };
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(()=>done(true), fallback);
+  }else{
+    fallback();
+  }
+}
+
 function renderResult(){
   saveAnswers();
   const total = answers.reduce((s,i,qi)=> s + QUESTIONS[qi].opts[i].p, 0);
@@ -492,6 +613,8 @@ function renderResult(){
   $("stampText").textContent = lv.name;
   $("verdict").textContent = lv.verdict;
   $("nextStep").textContent = lv.next;
+  $("coachPrompt").textContent = buildCoachPrompt(total, lv);
+  $("copyMsg").textContent = "";
   const stamp = $("stamp");
   stamp.classList.remove("press");
   void stamp.offsetWidth;
@@ -512,6 +635,7 @@ function renderResult(){
 }
 
 $("start").addEventListener("click", ()=>{ idx=0; answers=[]; clearAnswers(); show("quiz"); renderQ(); });
+$("copyPrompt").addEventListener("click", copyPrompt);
 $("back").addEventListener("click", ()=>{ if(idx>0){ idx--; renderQ(); } });
 $("retry").addEventListener("click", ()=>{ idx=0; answers=[]; clearAnswers(); show("quiz"); renderQ(); });
 
