@@ -481,6 +481,26 @@ const $ = id => document.getElementById(id);
 let idx = 0;
 let answers = [];
 
+const STORE_KEY = "aishindan.answers.v1";
+function saveAnswers(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(answers)); }catch(e){}
+}
+function clearAnswers(){
+  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+}
+function loadAnswers(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return null;
+    const a = JSON.parse(raw);
+    if(!Array.isArray(a) || a.length !== QUESTIONS.length) return null;
+    for(let i=0;i<a.length;i++){
+      if(!Number.isInteger(a[i]) || a[i] < 0 || a[i] >= QUESTIONS[i].opts.length) return null;
+    }
+    return a;
+  }catch(e){ return null; }
+}
+
 function show(id){
   ["intro","quiz","result"].forEach(s => $(s).classList.toggle("hidden", s!==id));
 }
@@ -589,6 +609,7 @@ function copyText(text){
 }
 
 function renderResult(){
+  saveAnswers();
   const total = answers.reduce((s,i,qi)=> s + QUESTIONS[qi].opts[i].p, 0);
   const lv = LEVELS.find(l => total>=l.min && total<=l.max);
   show("result");
@@ -616,14 +637,18 @@ function renderResult(){
   window.scrollTo({top:0});
 }
 
-$("start").addEventListener("click", ()=>{ idx=0; answers=[]; show("quiz"); renderQ(); });
+$("start").addEventListener("click", ()=>{ idx=0; answers=[]; clearAnswers(); show("quiz"); renderQ(); });
 $("back").addEventListener("click", ()=>{ if(idx>0){ idx--; renderQ(); } });
 $("copyPrompt").addEventListener("click", ()=>{
   copyText($("coachPrompt").textContent)
     .then(()=>{ $("copyMsg").textContent = "コピーしました"; })
     .catch(()=>{ selectPrompt(); $("copyMsg").textContent = "選択済みです。長押しでコピーしてください"; });
 });
-$("retry").addEventListener("click", ()=>{ idx=0; answers=[]; show("quiz"); renderQ(); });
+$("retry").addEventListener("click", ()=>{ idx=0; answers=[]; clearAnswers(); show("quiz"); renderQ(); });
+
+// 開き直しで結果画面を復元
+const saved = loadAnswers();
+if(saved){ answers = saved; renderResult(); }
 </script>
 </body>
 </html>
