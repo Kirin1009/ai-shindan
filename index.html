@@ -251,6 +251,56 @@
     margin-bottom:6px;
   }
   .next p{font-size:.98rem;line-height:1.9;}
+  /* 所見欄:あなた専用の、AIへの最初の指示文 */
+  .prompt{
+    border:1px solid var(--ink);
+    margin-bottom:30px;
+  }
+  .prompt h2{
+    font-size:.82rem;
+    font-weight:700;
+    letter-spacing:.14em;
+    color:var(--ink);
+    padding:10px 14px 8px;
+    border-bottom:1px solid var(--rule);
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:10px;
+  }
+  .prompt h2 small{
+    font-size:.72rem;
+    font-weight:500;
+    color:var(--ink-soft);
+    letter-spacing:.06em;
+    white-space:nowrap;
+  }
+  .prompt-text{
+    font-family:var(--mincho);
+    font-weight:600;
+    font-size:.95rem;
+    line-height:1.95;
+    padding:14px 16px;
+    white-space:pre-wrap;
+    -webkit-user-select:text;
+    user-select:text;
+  }
+  .prompt-text b{color:var(--shu);font-weight:700;}
+  .copy{
+    display:block;
+    width:100%;
+    padding:13px;
+    background:var(--paper);
+    color:var(--shu);
+    border:none;
+    border-top:1px solid var(--rule);
+    font-family:var(--gothic);
+    font-size:.95rem;
+    font-weight:700;
+    letter-spacing:.12em;
+    cursor:pointer;
+  }
+  .copy.done{background:var(--shu);color:var(--paper);}
   .homework{
     border-top:1px solid var(--rule);
     padding-top:20px;
@@ -337,6 +387,11 @@
       <div class="next">
         <h2>次の一歩</h2>
         <p id="nextStep"></p>
+      </div>
+      <div class="prompt">
+        <h2>あなた専用の、AIへの最初の指示文<small>帰ったらAIに貼る</small></h2>
+        <p class="prompt-text" id="promptText"></p>
+        <button class="copy" id="copy">コピーする</button>
       </div>
       <div class="homework">
         <h2>本日の宿題(全員共通)</h2>
@@ -431,6 +486,63 @@ const LEVELS = [
 ];
 
 const $ = id => document.getElementById(id);
+
+// いちばん点の低い項目ごとの「伸びしろ」
+const GROWTH = [
+  "有料版のAIを、自分のお金で使い始めること",
+  "調べ物だけでなく、作業そのものをAIに任せること",
+  "メールや予定など、自分の情報をAIに繋ぐこと",
+  "小さな道具を、AIと一緒に自分で作ること",
+  "自分の使い方を、社内の仕組みに広げること",
+];
+
+function buildPrompt(total, lv){
+  const pts = answers.map((a,qi)=> QUESTIONS[qi].opts[a].p);
+  const min = Math.min(...pts);
+  const weak = pts.every(p => p === 20) ? 4 : pts.indexOf(min);
+  return [
+    { t:"私は会社の経営者です。AI活用度の診断を受けたところ、" },
+    { t:`${total}点・${lv.name}`, em:true },
+    { t:"でした。いちばんの伸びしろは「" },
+    { t:GROWTH[weak], em:true },
+    { t:"」だそうです。\nこれから私に質問をしながら、私の仕事の中でAIに任せられることを、一緒に3つ見つけてください。質問は一度に1つずつにしてください。\n最後に、明日から始められる最初の一歩を1つだけ、具体的な手順で教えてください。" },
+  ];
+}
+
+function renderPrompt(total, lv){
+  const parts = buildPrompt(total, lv);
+  const box = $("promptText");
+  box.textContent = "";
+  parts.forEach(p=>{
+    const n = p.em ? document.createElement("b") : document.createTextNode(p.t);
+    if(p.em) n.textContent = p.t;
+    box.appendChild(n);
+  });
+  const btn = $("copy");
+  btn.textContent = "コピーする";
+  btn.classList.remove("done");
+}
+
+async function copyPrompt(){
+  const text = $("promptText").textContent;
+  const btn = $("copy");
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(e){
+    // clipboard APIが使えない環境向けの代替
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly","");
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand && document.execCommand("copy");
+    ta.remove();
+    if(!ok){ btn.textContent = "長押しで選択してコピーしてください"; return; }
+  }
+  btn.textContent = "コピーしました";
+  btn.classList.add("done");
+}
 let idx = 0;
 let answers = [];
 
@@ -471,6 +583,7 @@ function renderResult(){
   $("stampText").textContent = lv.name;
   $("verdict").textContent = lv.verdict;
   $("nextStep").textContent = lv.next;
+  renderPrompt(total, lv);
   const stamp = $("stamp");
   stamp.classList.remove("press");
   void stamp.offsetWidth;
@@ -492,6 +605,7 @@ function renderResult(){
 
 $("start").addEventListener("click", ()=>{ idx=0; answers=[]; show("quiz"); renderQ(); });
 $("back").addEventListener("click", ()=>{ if(idx>0){ idx--; renderQ(); } });
+$("copy").addEventListener("click", copyPrompt);
 $("retry").addEventListener("click", ()=>{ idx=0; answers=[]; show("quiz"); renderQ(); });
 </script>
 </body>
