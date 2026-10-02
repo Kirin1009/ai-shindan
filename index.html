@@ -292,6 +292,56 @@
     justify-content:space-between;
     gap:10px;
   }
+  .coach{
+    border-top:1px solid var(--ink);
+    padding-top:20px;
+    margin-bottom:24px;
+  }
+  .coach h2{
+    font-family:var(--mincho);
+    font-size:1rem;
+    font-weight:700;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+  .coach .coach-lead{
+    font-size:.9rem;
+    color:var(--ink-soft);
+    margin-bottom:12px;
+  }
+  .coach textarea{
+    display:block;
+    width:100%;
+    height:15em;
+    padding:12px;
+    background:#fff;
+    border:1px solid var(--rule);
+    border-left:3px solid var(--shu);
+    border-radius:0;
+    color:var(--ink);
+    font-family:var(--gothic);
+    font-size:16px;
+    line-height:1.7;
+    resize:vertical;
+    -webkit-user-select:text;
+    user-select:text;
+    margin-bottom:10px;
+  }
+  .coach .copy-row{display:flex;align-items:center;gap:12px;}
+  .coach .btn-copy{
+    flex-shrink:0;
+    padding:10px 22px;
+    background:var(--shu);
+    color:#fff;
+    border:none;
+    font-family:var(--gothic);
+    font-size:.95rem;
+    font-weight:700;
+    letter-spacing:.1em;
+    cursor:pointer;
+  }
+  .coach .btn-copy:active{opacity:.75;}
+  .coach .copy-msg{font-size:.82rem;color:var(--ink-soft);}
   .hidden{display:none;}
 </style>
 </head>
@@ -346,6 +396,15 @@
         </ol>
       </div>
       <p class="share-note">検査が終わったら、隣の方と点数を見せ合ってください。</p>
+      <div class="coach">
+        <h2>AIと続ける稽古</h2>
+        <p class="coach-lead">下の文章をコピーして、ChatGPT や Claude などに貼り付けてください。この検査結果をもとに、AIがあなた専用のコーチになって、次の段階へ一歩ずつ導きます。</p>
+        <textarea id="coachPrompt" readonly aria-label="AIに貼り付ける指示文"></textarea>
+        <div class="copy-row">
+          <button class="btn-copy" id="copyPrompt">コピー</button>
+          <span class="copy-msg" id="copyMsg" aria-live="polite">長押しでも選択できます</span>
+        </div>
+      </div>
       <button class="btn-ghost" id="retry">もう一度検査する</button>
     </section>
   </main>
@@ -484,6 +543,61 @@ function renderQ(){
   window.scrollTo({top:0});
 }
 
+function buildCoachPrompt(total, lv){
+  const lvIdx = LEVELS.indexOf(lv);
+  const nextLv = LEVELS[lvIdx+1];
+  const lines = QUESTIONS.map((q,i)=>{
+    const o = q.opts[answers[i]];
+    return `${KANJI[i]}、${q.q}\n  → ${o.t}(${o.p}/20点)`;
+  }).join("\n");
+  const weak = QUESTIONS.map((q,i)=>({q, p:q.opts[answers[i]].p})).filter(x=>x.p<20);
+  const minP = weak.length ? Math.min(...weak.map(x=>x.p)) : null;
+  const focus = weak.filter(x=>x.p===minP).map(x=>`・${x.q.q}`).join("\n");
+  const goal = nextLv
+    ? `次の段階「${nextLv.name}」(${nextLv.min}点以上)に上がること。`
+    : `最上位の「${lv.name}」を、私個人の活用から会社全体の環境に広げること。`;
+
+  return `あなたは、中小企業の経営者にAI活用を教えるコーチです。
+私は先ほど「AI活用度 検査」を受けました。結果は次の通りです。
+
+■ 総合:${total}点/100点 ― 判定「${lv.name}」
+■ 判定コメント:${lv.verdict}
+■ 次の一歩:${lv.next}
+
+■ 各項目の回答
+${lines}
+
+■ 特に伸びしろのある項目
+${focus || "・全項目が満点です。会社への展開に集中したいです。"}
+
+■ 目標
+${goal}
+
+これから私のAIスキルを上げるための稽古相手になってください。進め方は次の通りです。
+1. 最初に、私の業種・仕事の内容・普段使っているツールについて、質問を三つまでしてください。答えるまで課題は出さないでください。
+2. 私の答えをふまえて、「特に伸びしろのある項目」に効く課題を一つだけ出してください。今日、15分以内にできる具体的なものにしてください。
+3. 課題には、AIに打ち込む文章の例を付けてください。そのまま使える形でお願いします。
+4. 私が「やった」と結果を報告したら、良かった点と改善点を短く伝え、少しだけ難しい次の課題を出してください。
+5. 専門用語は使うときに一言で説明してください。返答は短く、一度に一つのことだけにしてください。
+6. 私が次の段階に上がれたと思えたら、そう伝えて、検査をもう一度受けるよう勧めてください。
+
+準備ができたら、最初の質問から始めてください。`;
+}
+
+async function copyText(text){
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  }catch(e){}
+  const ta = $("coachPrompt");
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+  try{ return document.execCommand("copy"); }catch(e){ return false; }
+}
+
 function renderResult(){
   saveAnswers();
   const total = answers.reduce((s,i,qi)=> s + QUESTIONS[qi].opts[i].p, 0);
@@ -492,6 +606,8 @@ function renderResult(){
   $("stampText").textContent = lv.name;
   $("verdict").textContent = lv.verdict;
   $("nextStep").textContent = lv.next;
+  $("coachPrompt").value = buildCoachPrompt(total, lv);
+  $("copyMsg").textContent = "長押しでも選択できます";
   const stamp = $("stamp");
   stamp.classList.remove("press");
   void stamp.offsetWidth;
@@ -512,6 +628,12 @@ function renderResult(){
 }
 
 $("start").addEventListener("click", ()=>{ idx=0; answers=[]; clearAnswers(); show("quiz"); renderQ(); });
+$("copyPrompt").addEventListener("click", async ()=>{
+  const ok = await copyText($("coachPrompt").value);
+  $("copyMsg").textContent = ok
+    ? "コピーしました。AIのチャット欄に貼り付けてください"
+    : "選択しました。長押しで「コピー」を選んでください";
+});
 $("back").addEventListener("click", ()=>{ if(idx>0){ idx--; renderQ(); } });
 $("retry").addEventListener("click", ()=>{ idx=0; answers=[]; clearAnswers(); show("quiz"); renderQ(); });
 
