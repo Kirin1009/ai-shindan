@@ -281,6 +281,57 @@
     color:var(--ink-soft);
     margin-bottom:30px;
   }
+  /* ---- AIとの自主稽古(コピー用の指示文) ---- */
+  .practice{
+    border-top:1px solid var(--rule);
+    padding-top:20px;
+    margin-bottom:30px;
+  }
+  .practice h2{
+    font-family:var(--mincho);
+    font-size:1rem;
+    font-weight:700;
+    letter-spacing:.08em;
+    margin-bottom:8px;
+  }
+  .practice .how{
+    font-size:.88rem;
+    color:var(--ink-soft);
+    margin-bottom:12px;
+  }
+  .prompt-box{
+    background:#fff;
+    border:1px solid var(--rule);
+    border-top:2px solid var(--ink);
+    padding:14px 14px 12px;
+    font-size:.84rem;
+    line-height:1.85;
+    white-space:pre-wrap;
+    word-break:break-word;
+    max-height:300px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    -webkit-user-select:text;
+    user-select:text;
+    -webkit-touch-callout:default;
+    margin-bottom:12px;
+  }
+  .btn-copy{
+    background:none;
+    color:var(--ink);
+    border:1px solid var(--ink);
+  }
+  .btn-copy.done{
+    background:var(--shu);
+    border-color:var(--shu);
+    color:var(--paper);
+  }
+  .practice .caution{
+    font-size:.76rem;
+    color:var(--ink-soft);
+    margin-top:10px;
+    line-height:1.7;
+  }
   .sheet-foot{
     border-top:1px solid var(--ink);
     margin-top:auto;
@@ -346,6 +397,13 @@
         </ol>
       </div>
       <p class="share-note">検査が終わったら、隣の方と点数を見せ合ってください。</p>
+      <div class="practice">
+        <h2>AIと続ける自主稽古</h2>
+        <p class="how">下の指示文をコピーして、ChatGPT や Claude などのAIに貼り付けてください。あなたの検査結果に合わせて、AIがコーチ役になって一歩ずつ課題を出してくれます。</p>
+        <div class="prompt-box" id="promptBox"></div>
+        <button class="btn btn-copy" id="copyPrompt">指示文をコピーする</button>
+        <p class="caution">※ 長押しでも選択・コピーできます。※ 社外秘の情報や個人情報は、AIに貼る前に伏せてください。</p>
+      </div>
       <button class="btn-ghost" id="retry">もう一度検査する</button>
     </section>
   </main>
@@ -430,6 +488,87 @@ const LEVELS = [
   },
 ];
 
+// レベルごとの「AIと続ける自主稽古」の狙い(LEVELS と同じ順)
+const PRACTICE = [
+  {
+    aim:"AIを「検索の代わり」から「相談相手」に変えること。背景・目的・条件を伝える聞き方を覚え、毎日AIに触る習慣をつけたい。",
+    goal:"手足期(AIに作業を任せる段階)",
+  },
+  {
+    aim:"AIに「作業」を任せること。ファイル整理・資料の下書き・表の集計などを、任せ方(指示の出し方・確認の仕方)ごと上達したい。",
+    goal:"接続期(自分の情報をAIに繋ぐ段階)",
+  },
+  {
+    aim:"メール・カレンダー・社内データをAIに繋ぎ、自分の情報を前提にAIを使うこと。何から繋ぐか、情報の扱いで何に気をつけるかも含めて学びたい。",
+    goal:"自作期(AIでアプリやツールを作る段階)",
+  },
+  {
+    aim:"AIで小さなアプリやツールを作り、動かし、直すこと。仕事でも趣味でもいいので、作りたいものを形にする力をつけたい。",
+    goal:"環境設計期(社内にAIの環境をつくる段階)",
+  },
+  {
+    aim:"自分個人のAI活用を、社員も使える会社の環境に変えること。データの繋ぎ方、ルールの与え方、手順やノウハウの記憶のさせ方を設計したい。",
+    goal:"社員一人ひとりが自走して、AIで業務を回している状態",
+  },
+];
+
+function buildPrompt(total, lv){
+  const p = PRACTICE[LEVELS.indexOf(lv)];
+  const lines = QUESTIONS.map((q,qi)=>{
+    const o = q.opts[answers[qi]];
+    return `${KANJI[qi]}、${q.q}\n → ${o.t}(${o.p}点/20点)`;
+  });
+  const weak = QUESTIONS
+    .map((q,qi)=>({q, p:q.opts[answers[qi]].p}))
+    .filter(x => x.p < 20)
+    .sort((a,b)=> a.p - b.p)
+    .slice(0,2)
+    .map(x => `・${x.q.q}`);
+  return [
+    "あなたは、私のAI活用を伸ばすコーチです。",
+    "以下は、講演で受けた「AI活用度 検査」の私の結果です。この結果をもとに、対話をしながら私のAIスキルを一歩ずつ上げてください。",
+    "",
+    "【検査結果】",
+    `総合 ${total}点/100点(判定:${lv.name})`,
+    ...lines,
+    "",
+    "【今の段階で伸ばしたいこと】",
+    p.aim,
+    "",
+    ...(weak.length ? ["【特に伸びしろがある項目】", ...weak, ""] : []),
+    "【目指す次の段階】",
+    p.goal,
+    "",
+    "【進め方のお願い】",
+    "1. まず、私の仕事内容と今のAIの使い方について、質問を一つずつしてください(多くても三問まで)。",
+    "2. 答えをもとに、今日〜今週のうちに15分でできる練習課題を一つだけ出してください。題材は私の実際の仕事や身の回りのことにしてください。",
+    "3. 私が課題の結果を報告したら、良かった点と直す点を短く伝え、少しだけ難しい次の課題を出してください。",
+    "4. 私が「次の段階へ」と言ったら、目指す次の段階に進むための課題に切り替えてください。",
+    "5. 専門用語はなるべく使わず、使うときは一言で説明してください。返事は短めにお願いします。",
+    "",
+    "それでは、最初の質問からお願いします。",
+  ].join("\n");
+}
+
+function copyText(text){
+  if(navigator.clipboard && window.isSecureContext){
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject)=>{
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly","");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    ok ? resolve() : reject();
+  });
+}
+
 const $ = id => document.getElementById(id);
 let idx = 0;
 let answers = [];
@@ -471,6 +610,8 @@ function renderResult(){
   $("stampText").textContent = lv.name;
   $("verdict").textContent = lv.verdict;
   $("nextStep").textContent = lv.next;
+  $("promptBox").textContent = buildPrompt(total, lv);
+  $("promptBox").scrollTop = 0;
   const stamp = $("stamp");
   stamp.classList.remove("press");
   void stamp.offsetWidth;
@@ -492,6 +633,17 @@ function renderResult(){
 
 $("start").addEventListener("click", ()=>{ idx=0; answers=[]; show("quiz"); renderQ(); });
 $("back").addEventListener("click", ()=>{ if(idx>0){ idx--; renderQ(); } });
+$("copyPrompt").addEventListener("click", ()=>{
+  const b = $("copyPrompt");
+  copyText($("promptBox").textContent).then(()=>{
+    b.textContent = "コピーしました";
+    b.classList.add("done");
+  }).catch(()=>{
+    b.textContent = "長押しで選択してコピーしてください";
+  }).finally(()=>{
+    setTimeout(()=>{ b.textContent = "指示文をコピーする"; b.classList.remove("done"); }, 2200);
+  });
+});
 $("retry").addEventListener("click", ()=>{ idx=0; answers=[]; show("quiz"); renderQ(); });
 </script>
 </body>
